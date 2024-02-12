@@ -50,14 +50,17 @@ async fn main(_spawner: Spawner) {
     let driver = Driver::new(p.USB, Irqs, p.PA12, p.PA11);
 
     // Create embassy-usb Config
-    let config = embassy_usb::Config::new(0xc0de, 0xcafe);
+    let mut config = embassy_usb::Config::new(0xc0de, 0xcafe);
+    config.manufacturer = Some("Embassy");
+    config.product = Some("USB Example");
+    config.serial_number = Some("000");
 
     // Create embassy-usb DeviceBuilder using the driver and config.
     // It needs some buffers for building the descriptors.
     let mut device_descriptor = [0; 256];
     let mut config_descriptor = [0; 256];
     let mut bos_descriptor = [0; 256];
-    let mut control_buf = [0; 7];
+    let mut control_buf = [0; 64];
 
     let mut state = State::new();
 
@@ -106,7 +109,9 @@ impl From<EndpointError> for Disconnected {
     }
 }
 
-async fn echo<'d, T: Instance + 'd>(class: &mut CdcAcmClass<'d, Driver<'d, T>>) -> Result<(), Disconnected> {
+async fn echo<'d, T: Instance + 'd>(
+    class: &mut CdcAcmClass<'d, Driver<'d, T>>,
+) -> Result<(), Disconnected> {
     let mut buf = [0; 64];
     loop {
         let n = class.read_packet(&mut buf).await?;
