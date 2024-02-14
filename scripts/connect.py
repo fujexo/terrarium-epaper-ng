@@ -8,8 +8,12 @@ if dev is None:
 
 print(dev)
 
+# Send vendor control request (0x40) to interface (0x1)
+dev.ctrl_transfer(0x41, 100, 200)
+
 # get an endpoint instance
 cfg = dev.get_active_configuration()
+
 intf = cfg[(0, 0)]
 
 ep_out = intf.endpoints()[0]

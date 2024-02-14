@@ -1,20 +1,34 @@
 #![no_std]
 #![no_main]
 
-use defmt::{info, panic};
+use defmt::info;
+use {defmt_rtt as _, panic_probe as _};
+
 use embassy_executor::Spawner;
 use embassy_futures::join::join;
-use embassy_stm32::gpio::{Level, Output, Speed};
-use embassy_stm32::time::mhz;
-use embassy_stm32::usb::{Driver, Instance};
+use embassy_stm32::gpio::{Input, Level, Output, Pull, Speed};
+use embassy_stm32::spi;
+use embassy_stm32::time::{mhz, Hertz};
+use embassy_stm32::usb::Driver;
 use embassy_stm32::{bind_interrupts, peripherals, usb, Config};
-use embassy_time::Timer;
-use embassy_usb::driver::EndpointError;
-use embassy_usb::Builder;
+use embassy_time::Delay;
 
-use embedded_hal::digital::v2::OutputPin;
-use fuj_usb_testing::*;
-use {defmt_rtt as _, panic_probe as _};
+use embassy_usb::control::{InResponse, OutResponse, Recipient, Request, RequestType};
+use embassy_usb::driver::{Endpoint, EndpointIn, EndpointOut};
+use embassy_usb::types::InterfaceNumber;
+use embassy_usb::{Builder, Handler};
+
+use embedded_graphics::{
+    pixelcolor::BinaryColor::On as Black,
+    prelude::*,
+    primitives::{Line, PrimitiveStyle},
+};
+use epd_waveshare::prelude::WaveshareDisplay;
+use epd_waveshare::{
+    epd4in2::{Display4in2, Epd4in2},
+    graphics::DisplayRotation,
+    prelude::*,
+};
 
 bind_interrupts!(struct Irqs {
     USB_LP_CAN_RX0 => usb::InterruptHandler<peripherals::USB>;
@@ -43,6 +57,36 @@ async fn main(_spawner: Spawner) {
     }
     let p = embassy_stm32::init(config);
 
+    let mut spi_config = spi::Config::default();
+    spi_config.frequency = Hertz(1_000_000);
+
+    let mut spi = spi::Spi::new(
+        p.SPI1, p.PB3, p.PB5, p.PB4, p.DMA1_CH3, p.DMA1_CH2, spi_config,
+    );
+    let cs = Output::new(p.PE0, Level::High, Speed::VeryHigh);
+    let busy = Input::new(p.PE1, Pull::None);
+    let dc = Output::new(p.PE2, Level::High, Speed::VeryHigh);
+    let rst = Output::new(p.PE3, Level::High, Speed::VeryHigh);
+
+    let mut delay = Delay;
+
+    let mut epd =
+        Epd4in2::new(&mut spi, cs, busy, dc, rst, &mut delay).expect("eink initalize error");
+    let mut display = Display4in2::default();
+
+    display.set_rotation(DisplayRotation::Rotate0);
+    // Use embedded graphics for drawing a line
+    let _ = Line::new(Point::new(0, 120), Point::new(0, 295))
+        .into_styled(PrimitiveStyle::with_stroke(Black, 1))
+        .draw(&mut display);
+
+    // Display updated frame
+    epd.update_frame(&mut spi, &display.buffer(), &mut delay);
+    epd.display_frame(&mut spi, &mut delay);
+
+    // Set the EPD to sleep
+    epd.sleep(&mut spi, &mut delay);
+
     // Create the driver, from the HAL.
     let driver = Driver::new(p.USB, Irqs, p.PA12, p.PA11);
 
@@ -63,6 +107,13 @@ async fn main(_spawner: Spawner) {
     let mut bos_descriptor = [0; 256];
     let mut control_buf = [0; 64];
 
+    let mut led = Output::new(p.PE9, Level::High, Speed::Low);
+    led.set_high();
+
+    let mut handler = ControlHandler {
+        if_num: InterfaceNumber(0),
+    };
+
     let mut builder = Builder::new(
         driver,
         config,
@@ -73,53 +124,101 @@ async fn main(_spawner: Spawner) {
         &mut control_buf,
     );
 
-    let mut class = MyUSBClass::new(&mut builder, 1, 1, 64);
+    // Add a vendor-specific function (class 0xFF), and corresponding interface,
+    // that uses our custom handler.
+    let mut function = builder.function(0xFF, 0, 0);
+    let mut interface = function.interface();
+    handler.if_num = interface.interface_number();
+
+    let mut alt = interface.alt_setting(0xFF, 0, 0, None);
+    let mut read_ep = alt.endpoint_bulk_out(64);
+    let mut write_ep = alt.endpoint_bulk_in(64);
+    drop(function);
+    builder.handler(&mut handler);
 
     // Build the builder.
     let mut usb = builder.build();
 
-    // Needed for nucleo-stm32f303ze
-    let mut led = Output::new(p.PE9, Level::Low, Speed::Medium);
-
     // Run the USB device.
     let usb_fut = usb.run();
 
-    let myusb_fut = async {
+    // Do stuff with the class!
+    let echo_fut = async {
         loop {
-            class.wait_connection().await;
+            read_ep.wait_enabled().await;
             info!("Connected");
-            let _ = myusb_echo(&mut class, &mut led).await;
+            loop {
+                let mut data = [0; 64];
+                match read_ep.read(&mut data).await {
+                    Ok(n) => {
+                        info!("Got bulk: {:a}", data[..n]);
+                        // Echo back to the host:
+                        write_ep.write(&data[..n]).await.ok();
+                    }
+                    Err(_) => break,
+                }
+            }
             info!("Disconnected");
         }
     };
 
     // Run everything concurrently.
     // If we had made everything `'static` above instead, we could do this using separate tasks instead.
-    join(usb_fut, myusb_fut).await;
+    join(usb_fut, echo_fut).await;
 }
 
-struct Disconnected {}
+/// Handle CONTROL endpoint requests and responses. For many simple requests and responses
+/// you can get away with only using the control endpoint.
+struct ControlHandler {
+    if_num: InterfaceNumber,
+}
 
-impl From<EndpointError> for Disconnected {
-    fn from(val: EndpointError) -> Self {
-        match val {
-            EndpointError::BufferOverflow => panic!("Buffer overflow"),
-            EndpointError::Disabled => Disconnected {},
+impl Handler for ControlHandler {
+    /// Respond to HostToDevice control messages, where the host sends us a command and
+    /// optionally some data, and we can only acknowledge or reject it.
+    fn control_out<'a>(&'a mut self, req: Request, buf: &'a [u8]) -> Option<OutResponse> {
+        // Log the request before filtering to help with debugging.
+        info!("Got control_out, request={}, buf={:a}", req, buf);
+        info!("Interface: {}", self.if_num.0 as u16);
+
+        // Only handle Vendor request types to an Interface.
+        if req.request_type != RequestType::Vendor || req.recipient != Recipient::Interface {
+            return None;
+        }
+
+        // Ignore requests to other interfaces.
+        if req.index != self.if_num.0 as u16 {
+            return None;
+        }
+
+        // Accept request 100, value 200, reject others.
+        if req.request == 100 && req.value == 200 {
+            Some(OutResponse::Accepted)
+        } else {
+            Some(OutResponse::Rejected)
         }
     }
-}
 
-async fn myusb_echo<'d, T: Instance + 'd>(
-    class: &mut MyUSBClass<'d, Driver<'d, T>>,
-    led: &mut Output<'_>,
-) -> Result<(), Disconnected> {
-    let mut buf = [0; 64];
-    loop {
-        let n = class.read_packet(&mut buf).await?;
-        let data = &buf[..n];
-        info!("data: {:x}", data);
-        info!("string: {}", core::str::from_utf8(data).unwrap());
-        led.toggle();
-        class.write_packet(data).await?;
+    /// Respond to DeviceToHost control messages, where the host requests some data from us.
+    fn control_in<'a>(&'a mut self, req: Request, buf: &'a mut [u8]) -> Option<InResponse<'a>> {
+        info!("Got control_in, request={}", req);
+
+        // Only handle Vendor request types to an Interface.
+        if req.request_type != RequestType::Vendor || req.recipient != Recipient::Interface {
+            return None;
+        }
+
+        // Ignore requests to other interfaces.
+        if req.index != self.if_num.0 as u16 {
+            return None;
+        }
+
+        // Respond "hello" to request 101, value 201, when asked for 5 bytes, otherwise reject.
+        if req.request == 101 && req.value == 201 && req.length == 5 {
+            buf[..5].copy_from_slice(b"hello");
+            Some(InResponse::Accepted(&buf[..5]))
+        } else {
+            Some(InResponse::Rejected)
+        }
     }
 }
