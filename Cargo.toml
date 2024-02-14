@@ -5,9 +5,6 @@ version = "0.1.0"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-# Change stm32f303ze to your chip name, if necessary.
-embassy-embedded-hal = { version = "0.1.0" }
-
 embassy-stm32 = { version = "0.1.0", features = [
   "defmt",
   "stm32f303vc",
@@ -30,38 +27,27 @@ embassy-time = { version = "0.3.0", features = [
   "tick-hz-32_768",
 ] }
 embassy-usb = { version = "0.1.0", features = ["defmt"] }
-embassy-futures = { version = "0.1.0" }
+embassy-futures = { version = "0.1.1" }
 defmt = "0.3"
 defmt-rtt = "0.4"
 
-cortex-m = { version = "0.7.6", features = [
+cortex-m = { version = "0.7.7", features = [
   "inline-asm",
   "critical-section-single-core",
 ] }
-cortex-m-rt = "0.7.0"
-embedded-hal = "0.2.7"
+cortex-m-rt = "0.7.3"
+embedded-hal = "1.0.0"
 panic-probe = { version = "0.3", features = ["print-defmt"] }
-futures = { version = "0.3.17", default-features = false, features = [
+futures = { version = "0.3.30", default-features = false, features = [
   "async-await",
 ] }
 heapless = { version = "0.8", default-features = false }
-nb = "1.0.0"
+nb = "1.1.0"
 embedded-storage = "0.3.1"
-static_cell = "2"
 
 embedded-graphics = "0.8.1"
 epd-waveshare = "0.5.0"
 
-[patch.crates-io]
-embassy-stm32 = { git = "https://github.com/embassy-rs/embassy", rev = "b7c1ad553fc093754e9ff2ca154642a3d1124b0d" }
-embassy-sync = { git = "https://github.com/embassy-rs/embassy", rev = "b7c1ad553fc093754e9ff2ca154642a3d1124b0d" }
-embassy-executor = { git = "https://github.com/embassy-rs/embassy", rev = "b7c1ad553fc093754e9ff2ca154642a3d1124b0d" }
-embassy-time = { git = "https://github.com/embassy-rs/embassy", rev = "b7c1ad553fc093754e9ff2ca154642a3d1124b0d" }
-embassy-usb = { git = "https://github.com/embassy-rs/embassy", rev = "b7c1ad553fc093754e9ff2ca154642a3d1124b0d" }
-embassy-futures = { git = "https://github.com/embassy-rs/embassy", rev = "b7c1ad553fc093754e9ff2ca154642a3d1124b0d" }
-embassy-embedded-hal = { git = "https://github.com/embassy-rs/embassy", rev = "b7c1ad553fc093754e9ff2ca154642a3d1124b0d" }
-
-epd-waveshare = { git = "https://github.com/caemor/epd-waveshare", rev = "a083583441c166d07edaf2a6b5a31d025f45c483" }
 
 [profile.release]
 debug = 2
