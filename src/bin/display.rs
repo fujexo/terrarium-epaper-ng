@@ -30,23 +30,16 @@ async fn main(_spawner: Spawner) {
     let rst = Output::new(p.PE3, Level::High, Speed::VeryHigh);
     let busy_in = Input::new(p.PE1, Pull::None);
 
-    //use core::cell::RefCell;
-    //use embassy_sync::blocking_mutex::NoopMutex;
-    //use embassy_embedded_hal::shared_bus::blocking::spi::SpiDevice;
-    //let spi_bus = spi::Spi::new(p.SPI1, p.PB3, p.PB5, p.PB4, p.DMA1_CH3, p.DMA1_CH2, spi_config);
-    //let spi_bus = NoopMutex::new(RefCell::new(spi_bus));
-    //let mut spi = SpiDevice::new(&spi_bus, cs_pin);
-
     let mut spi = spi::Spi::new(
         p.SPI1, p.PB3, p.PB5, p.PB4, p.DMA1_CH3, p.DMA1_CH2, spi_config,
     );
 
     let mut delay = Delay;
 
-    debug!("####################################################################################");
+    debug!("Before EPD new");
 
     // Setup EPD
-    let mut epd = match Epd4in2::new(&mut spi, busy_in, dc, rst, &mut delay, None) {
+    let mut epd = match Epd4in2::new(&mut spi, cs_pin, busy_in, dc, rst, &mut delay) {
         Ok(epd) => epd,
         Err(err) => {
             error!("Failed to create EPD device: {}", err);
@@ -54,7 +47,7 @@ async fn main(_spawner: Spawner) {
         }
     };
 
-    debug!("####################################################################################");
+    debug!("After EPD New");
 
     // Use display graphics from embedded-graphics
     let mut display = Display4in2::default();
