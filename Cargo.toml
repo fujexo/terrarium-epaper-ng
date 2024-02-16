@@ -4,17 +4,19 @@ name = "fuj_usb_testing"
 version = "0.1.0"
 license = "MIT OR Apache-2.0"
 
+
 [dependencies]
-embassy-stm32 = { version = "0.1.0", features = [
-  "defmt",
-  "stm32f303vc",
-  "unstable-pac",
-  "memory-x",
-  "time-driver-any",
-  "exti",
-] }
 embassy-sync = { version = "0.5.0", features = ["defmt"] }
+embassy-nrf = { version = "0.1.0", features = [
+  "defmt",
+  "nrf52840",
+  "time-driver-rtc1",
+  "gpiote",
+  "unstable-pac",
+  "time",
+] }
 embassy-executor = { version = "0.5.0", features = [
+  "task-arena-size-32768",
   "arch-cortex-m",
   "executor-thread",
   "executor-interrupt",
@@ -45,8 +47,19 @@ heapless = { version = "0.8", default-features = false }
 nb = "1.1.0"
 embedded-storage = "0.3.1"
 
-embedded-graphics = "0.8.1"
+embedded-graphics = "0.7.1"
 epd-waveshare = "0.5.0"
+u8g2-fonts = "0.2.0"
+
+[patch.crates-io]
+embassy-stm32 = { git = "https://github.com/embassy-rs/embassy", rev = "b7c1ad553fc093754e9ff2ca154642a3d1124b0d" }
+embassy-nrf = { git = "https://github.com/embassy-rs/embassy", rev = "b7c1ad553fc093754e9ff2ca154642a3d1124b0d" }
+embassy-sync = { git = "https://github.com/embassy-rs/embassy", rev = "b7c1ad553fc093754e9ff2ca154642a3d1124b0d" }
+embassy-executor = { git = "https://github.com/embassy-rs/embassy", rev = "b7c1ad553fc093754e9ff2ca154642a3d1124b0d" }
+embassy-time = { git = "https://github.com/embassy-rs/embassy", rev = "b7c1ad553fc093754e9ff2ca154642a3d1124b0d" }
+embassy-usb = { git = "https://github.com/embassy-rs/embassy", rev = "b7c1ad553fc093754e9ff2ca154642a3d1124b0d" }
+embassy-futures = { git = "https://github.com/embassy-rs/embassy", rev = "b7c1ad553fc093754e9ff2ca154642a3d1124b0d" }
+embassy-embedded-hal = { git = "https://github.com/embassy-rs/embassy", rev = "b7c1ad553fc093754e9ff2ca154642a3d1124b0d" }
 
 
 [profile.release]
