@@ -1054,8 +1054,3 @@ checksum = "de437e2a6208b014ab52972a27e59b33fa2920d3e00fe05026167a1c509d19cc"
 dependencies = [
  "vcell",
 ]
-
-[[patch.unused]]
-name = "embassy-stm32"
-version = "0.1.0"
-source = "git+https://github.com/embassy-rs/embassy?rev=b7c1ad553fc093754e9ff2ca154642a3d1124b0d#b7c1ad553fc093754e9ff2ca154642a3d1124b0d"

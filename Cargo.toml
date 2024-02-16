@@ -52,7 +52,6 @@ epd-waveshare = "0.5.0"
 u8g2-fonts = "0.2.0"
 
 [patch.crates-io]
-embassy-stm32 = { git = "https://github.com/embassy-rs/embassy", rev = "b7c1ad553fc093754e9ff2ca154642a3d1124b0d" }
 embassy-nrf = { git = "https://github.com/embassy-rs/embassy", rev = "b7c1ad553fc093754e9ff2ca154642a3d1124b0d" }
 embassy-sync = { git = "https://github.com/embassy-rs/embassy", rev = "b7c1ad553fc093754e9ff2ca154642a3d1124b0d" }
 embassy-executor = { git = "https://github.com/embassy-rs/embassy", rev = "b7c1ad553fc093754e9ff2ca154642a3d1124b0d" }
